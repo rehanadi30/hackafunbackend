@@ -4,6 +4,7 @@ from PIL import Image
 import json
 import random
 import requests
+import torch
 
 app = Flask(__name__)
 
@@ -25,31 +26,31 @@ class MatchingResponse:
     def __init__(self, match_result):
         self.match_result = match_result
 
+def cartoonify(img):
+    face2paint = torch.hub.load("bryandlee/animegan2-pytorch:main", "face2paint", size=512)
+    model = torch.hub.load("bryandlee/animegan2-pytorch:main", "generator", pretrained="face_paint_512_v1")
+
+    image = Image.open(img).resize((512,512))
+    out = face2paint(model, image)
+
+    return out
+
 @app.route('/scan_face', methods=['POST'])
 def scan_face():
     # Get the image from the request
     image_file = request.files.get('image')
     if not image_file:
         return jsonify({"error": "No image provided"}), 400
-    
-    """ 
-    TODO: Change this with your function to generate image. The file scan can be accessed from image_file. 
-    You can also add response if the image does not contain face with 'no face found' but it is not truly important
-    """
-    # Dummy image URL
-    dummy_image_url = "https://lumiere-a.akamaihd.net/v1/images/a_avatarpandorapedia_neytiri_16x9_1098_01_0e7d844a.jpeg?region=0%2C0%2C1920%2C1080"
-    
+
     try:
         # Fetch the dummy image from the URL
-        response = requests.get(dummy_image_url)
-        response.raise_for_status()
         
         # Open the image from the fetched content
-        dummy_image = Image.open(BytesIO(response.content))
+        output_cartoon = cartoonify(image_file)
         
         # Convert the dummy image to bytes and send as a response
         img_io = BytesIO()
-        dummy_image.save(img_io, 'JPEG')
+        output_cartoon.save(img_io, 'JPEG')
         img_io.seek(0)
         
         return send_file(img_io, mimetype='image/jpeg')
