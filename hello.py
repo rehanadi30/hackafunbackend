@@ -5,6 +5,7 @@ import json
 import random
 import requests
 import torch
+import rembg
 
 app = Flask(__name__)
 
@@ -27,13 +28,18 @@ class MatchingResponse:
         self.match_result = match_result
 
 def cartoonify(img):
+    # Load the models (this could be optimized by loading them outside the function if called repeatedly)
     face2paint = torch.hub.load("bryandlee/animegan2-pytorch:main", "face2paint", size=512)
     model = torch.hub.load("bryandlee/animegan2-pytorch:main", "generator", pretrained="face_paint_512_v1")
 
-    image = Image.open(img).resize((512,512))
+    # Resize the image (assuming 'img' is already an opened PIL Image)
+    image = img.resize((512, 512))
+
+    # Apply the cartoonification
     out = face2paint(model, image)
 
     return out
+
 
 @app.route('/scan_face', methods=['POST'])
 def scan_face():
@@ -43,21 +49,24 @@ def scan_face():
         return jsonify({"error": "No image provided"}), 400
 
     try:
-        # Fetch the dummy image from the URL
+        # Open the image from the request
+        input_image = Image.open(image_file)
         
-        # Open the image from the fetched content
-        output_cartoon = cartoonify(image_file)
-        
-        # Convert the dummy image to bytes and send as a response
-        img_io = BytesIO()
-        output_cartoon.save(img_io, 'JPEG')
-        img_io.seek(0)
-        
-        return send_file(img_io, mimetype='image/jpeg')
-    
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Failed to fetch dummy image from URL: {str(e)}"}), 500
+        # Process the image (e.g., cartoonify)
+        output_cartoon = cartoonify(input_image)  # Assuming cartoonify is your function
 
+        # Remove the background
+        output_no_bg = rembg.remove(output_cartoon)
+
+        # Convert the processed image to bytes and send as a response
+        img_io = BytesIO()
+        output_no_bg.save(img_io, 'PNG')  # PNG format preserves transparency
+        img_io.seek(0)
+
+        return send_file(img_io, mimetype='image/png')
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 @app.route('/matching', methods=['POST'])
 def matching():
     # Get the JSON data from the request
